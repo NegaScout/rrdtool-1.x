@@ -1126,6 +1126,7 @@ static void *flush_thread_main(
     gettimeofday(&now, NULL);
     next_flush.tv_sec = now.tv_sec + config_flush_interval;
     next_flush.tv_nsec = 1000 * now.tv_usec;
+    RRDD_LOG(LOG_DEBUG, "CDN77: Flush thread created at");
 
     pthread_mutex_lock(&cache_lock);
 
@@ -1171,6 +1172,7 @@ static void *flush_thread_main(
 static void *queue_thread_main(
     void UNUSED(*args))
 {                       /* {{{ */
+    RRDD_LOG(LOG_DEBUG, "CDN77: Queue thread created");
     pthread_mutex_lock(&cache_lock);
 
     while (state != SHUTDOWN
@@ -1222,6 +1224,9 @@ static void *queue_thread_main(
             RRDD_LOG(LOG_NOTICE, "queue_thread_main: "
                      "rrd_update_r (%s) failed with status %i. (%s)",
                      file, status, rrd_get_error());
+        }
+        else{
+            RRDD_LOG(LOG_DEBUG, "CDN77: Succesfully wrote %d values to %s", values_num, file);
         }
 
         journal_write("wrote", file);
@@ -1419,7 +1424,7 @@ static int handle_request_stats(
 
     uint64_t  tree_nodes_number;
     uint64_t  tree_depth;
-
+    RRDD_LOG(LOG_DEBUG, "CDN77: Handling request STATS");
     pthread_mutex_lock(&stats_lock);
     copy_queue_length = stats_queue_length;
     copy_updates_received = stats_updates_received;
@@ -1476,6 +1481,9 @@ static int handle_request_flush(
         if (file == NULL) {
             rc = send_response(sock, RESP_ERR, "%s\n", rrd_strerror(ENOMEM));
             goto done;
+        }
+        else{
+            RRDD_LOG(LOG_DEBUG, "CDN77: Handling request FLUSH for %s", file);
         }
         if (!check_file_access(file, sock)) {
             rc = send_response(sock, RESP_ERR, "%s: %s\n", file,
@@ -1536,7 +1544,9 @@ static int handle_request_pending(
     file = get_abs_path(pbuffile);
     if (file == NULL)
         return send_response(sock, RESP_ERR, "%s\n", rrd_strerror(ENOMEM));
-
+    else{
+        RRDD_LOG(LOG_DEBUG, "CDN77: Handling request PENDING for %s", file);
+    }
     pthread_mutex_lock(&cache_lock);
     ci = g_tree_lookup(cache_tree, file);
     if (ci != NULL) {
@@ -1567,6 +1577,9 @@ static int handle_request_forget(
         rc = send_response(sock, RESP_ERR, "%s\n", rrd_strerror(ENOMEM));
         goto done;
     }
+    else{
+        RRDD_LOG(LOG_DEBUG, "CDN77: Handling request FORGET for %s", file);
+    }
     if (!check_file_access(file, sock)) {
         rc = send_response(sock, RESP_ERR, "%s: %s\n", file,
                            rrd_strerror(EACCES));
@@ -1594,7 +1607,7 @@ static int handle_request_queue(
     HANDLER_PROTO)
 {                       /* {{{ */
     cache_item_t *ci;
-
+    RRDD_LOG(LOG_DEBUG, "CDN77: Handling request QUEUE");
     pthread_mutex_lock(&cache_lock);
 
     ci = cache_queue_head;
@@ -1639,6 +1652,9 @@ static int handle_request_update(
         rc = send_response(sock, RESP_ERR, "%s\n", rrd_strerror(ENOMEM));
         goto done;
     }
+    else
+        RRDD_LOG(LOG_DEBUG, "CDN77: Handling request UPDATE for %s", file);
+
     if (!check_file_access(file, sock)) {
         rc = send_response(sock, RESP_ERR, "%s: %s\n", file,
                            rrd_strerror(EACCES));
@@ -1835,6 +1851,8 @@ static int handle_request_dump(
     if (filepath == NULL) {
         return send_response(sock, RESP_ERR, "%s\n", rrd_strerror(ENOMEM));
     }
+    else
+        RRDD_LOG(LOG_DEBUG, "CDN77: Handling request DUMP for %s", filepath);
 
     struct stat statbuf;
     memset(&statbuf, 0, sizeof(statbuf));
@@ -1896,6 +1914,8 @@ static int handle_request_tune(
         rc = send_response(sock, RESP_ERR, "%s\n", rrd_strerror(ENOMEM));
         goto done;
     }
+    else
+        RRDD_LOG(LOG_DEBUG, "CDN77: Handling request TUNE for %s", file);
 
     if (!check_file_access(file, sock)) {
         rc = send_response(sock, RESP_ERR, "%s: %s\n", file,
@@ -2164,7 +2184,7 @@ static int handle_request_fetch(
     int       status;
 
     struct fetch_parsed parsed;
-
+    RRDD_LOG(LOG_DEBUG, "CDN77: Handling request FETCH");
     status = handle_request_fetch_parse(cmd, sock, now,
                                         buffer, buffer_size, &parsed);
     if (status != 0)
@@ -2208,6 +2228,7 @@ static int handle_request_fetchbin(
 
     time_t    t;
     int       status;
+    RRDD_LOG(LOG_DEBUG, "CDN77: Handling request FETCHBIN");
 
     struct fetch_parsed parsed;
 
@@ -2265,6 +2286,7 @@ static int handle_request_wrote(
 {                       /* {{{ */
     cache_item_t *ci;
     const char *file = buffer;
+    RRDD_LOG(LOG_DEBUG, "CDN77: Handling request WROTE for %s", file);
 
     pthread_mutex_lock(&cache_lock);
 
@@ -2301,6 +2323,8 @@ static int handle_request_info(
         rc = send_response(sock, RESP_ERR, "%s\n", rrd_strerror(ENOMEM));
         goto done;
     }
+    else
+        RRDD_LOG(LOG_DEBUG, "CDN77: Handling request INFO for %s", file);
     if (!check_file_access(file, sock)) {
         rc = send_response(sock, RESP_ERR, "%s: %s\n", file,
                            rrd_strerror(EACCES));
@@ -2370,6 +2394,8 @@ static int handle_request_first(
         rc = send_response(sock, RESP_ERR, "%s\n", rrd_strerror(ENOMEM));
         goto done;
     }
+    else
+        RRDD_LOG(LOG_DEBUG, "CDN77: Handling request FIRST for %s", file);
     if (!check_file_access(file, sock)) {
         rc = send_response(sock, RESP_ERR, "%s: %s\n", file,
                            rrd_strerror(EACCES));
@@ -2425,6 +2451,9 @@ static int handle_request_last(
         rc = send_response(sock, RESP_ERR, "%s\n", rrd_strerror(ENOMEM));
         goto done;
     }
+    else
+        RRDD_LOG(LOG_DEBUG, "CDN77: Handling request LAST for %s", file);
+
     if (!check_file_access(file, sock)) {
         rc = send_response(sock, RESP_ERR, "%s: %s\n", file,
                            rrd_strerror(EACCES));
@@ -2490,6 +2519,8 @@ static int handle_request_create(
     if (file == NULL) {
         rc = send_response(sock, RESP_ERR, "%s\n", rrd_strerror(ENOMEM));
         goto done;
+    }else {
+        RRDD_LOG(LOG_DEBUG, "CDN77: Handling request CREATE for %s", file);
     }
 
     file_copy = strdup(file);
@@ -2833,6 +2864,8 @@ static int handle_request_suspend(
         ci->flags |= CI_FLAGS_SUSPENDED;
         rc = send_response(sock, RESP_OK, "%s suspended\n", file_name);
     }
+    RRDD_LOG(LOG_DEBUG, "CDN77: Handling request SUSPEND for %s", file_name);
+
     free(file_name);
     return rc;
 }                       /* }}} static int handle_request_suspend */
@@ -2854,6 +2887,8 @@ static int handle_request_resume(
         ci->flags &= ~CI_FLAGS_SUSPENDED;
         rc = send_response(sock, RESP_OK, "%s resumed\n", file_name);
     }
+    RRDD_LOG(LOG_DEBUG, "CDN77: Handling request RESUME for %s", file_name);
+
     free(file_name);
     return rc;
 }                       /* }}} static int handle_request_resume */
@@ -2877,6 +2912,7 @@ static int handle_request_suspendall(
     HANDLER_PROTO)
 {                       /* {{{ */
     int       count = 0;
+    RRDD_LOG(LOG_DEBUG, "CDN77: Handling request SUSPENDALL");
 
     g_tree_foreach(cache_tree, tree_callback_suspend, (gpointer) & count);
     return send_response(sock, RESP_OK, "%d rrds suspend\n", count);
@@ -2901,6 +2937,7 @@ static int handle_request_resumeall(
     HANDLER_PROTO)
 {                       /* {{{ */
     int       count = 0;
+    RRDD_LOG(LOG_DEBUG, "CDN77: Handling request RESUMEALL");
 
     g_tree_foreach(cache_tree, tree_callback_resume, (gpointer) & count);
     return send_response(sock, RESP_OK, "%d rrds resumed\n", count);
@@ -2911,6 +2948,7 @@ static int batch_start(
     HANDLER_PROTO)
 {                       /* {{{ */
     int       status;
+    RRDD_LOG(LOG_DEBUG, "CDN77: Handling request BATCH START");
 
     if (sock->batch_start)
         return send_response(sock, RESP_ERR, "Already in BATCH\n");
@@ -2927,6 +2965,8 @@ static int batch_start(
 static int batch_done(
     HANDLER_PROTO)
 {                       /* {{{ */
+    RRDD_LOG(LOG_DEBUG, "CDN77: Handling request BATCH DONE");
+
     assert(sock->batch_start);
     sock->batch_start = 0;
     sock->batch_cmd = 0;
@@ -2936,6 +2976,8 @@ static int batch_done(
 static int handle_request_quit(
     HANDLER_PROTO)
 {                       /* {{{ */
+    RRDD_LOG(LOG_DEBUG, "CDN77: Handling request QUIT");
+
     return -1;
 }                       /* }}} static int handle_request_quit */
 
@@ -3269,6 +3311,7 @@ static int handle_request_help(
     char     *resp_txt;
     char      tmp[RRD_CMD_MAX];
     command_t *help = NULL;
+    RRDD_LOG(LOG_DEBUG, "CDN77: Handling request HELP");
 
     status = buffer_get_field(&buffer, &buffer_size, &cmd_str);
     if (status == 0)
@@ -3301,6 +3344,7 @@ static int handle_request_help(
 static int handle_request_ping(
     HANDLER_PROTO)
 {                       /* {{{ */
+    RRDD_LOG(LOG_DEBUG, "CDN77: Handling request PING");
     return send_response(sock, RESP_OK, "%s\n", "PONG");
 }                       /* }}} int handle_request_ping */
 
@@ -3743,6 +3787,8 @@ static void *connection_thread_main(
 
     sock = (listen_socket_t *) args;
     fd = sock->fd;
+
+    RRDD_LOG(LOG_DEBUG, "CDN77: Created connection thread to handle incoming data");
 
     /* init read buffers */
     sock->next_read = sock->next_cmd = 0;
